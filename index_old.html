@@ -11,7 +11,6 @@
 <link rel="manifest" href="manifest.json">
 <title>LR Bilty Filter</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 <style>
   :root {
     --red:#e63946;--dark:#1a1a2e;--panel:#16213e;
@@ -26,7 +25,7 @@
   .topbar-sub{font-size:11px;color:rgba(255,255,255,0.75);margin-top:1px;}
   .main{flex:1;padding:20px 16px;max-width:640px;margin:0 auto;width:100%;}
   .card{background:var(--panel);border-radius:14px;padding:20px;margin-bottom:16px;border:1px solid var(--border);}
-  .card-title{font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:14px; display: flex; justify-content: space-between; align-items: center;}
+  .card-title{font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
   .upload-zone{border:2px dashed var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:border-color 0.2s,background 0.2s;position:relative;}
   .upload-zone:hover,.upload-zone.dragover{border-color:var(--red);background:rgba(230,57,70,0.07);}
   .upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
@@ -80,16 +79,7 @@
   .install-banner-sub{font-size:11px;color:var(--muted);margin-top:2px;}
   .btn-install{background:var(--gold);color:#1a1a2e;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;}
   .footer{text-align:center;padding:16px;font-size:11px;color:var(--muted);}
-  
-  /* History Styles */
-  .history-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-  .history-item { background: var(--field); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center;}
-  .history-info { display: flex; flex-direction: column; gap: 4px; }
-  .history-name { font-size: 13px; font-weight: 600; color: var(--text); }
-  .history-meta { font-size: 11px; color: var(--muted); }
-  .btn-history-dl { background: var(--border); color: var(--text); border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; cursor: pointer; transition: background 0.2s;}
-  .btn-history-dl:hover { background: var(--green); color: #fff; }
-  .clear-history { background: none; border: none; color: var(--red); font-size: 11px; cursor: pointer; text-decoration: underline; }
+  .empty-hint{text-align:center;padding:30px 10px;color:var(--muted);font-size:13px;}
 </style>
 </head>
 <body>
@@ -113,6 +103,7 @@
     <button class="btn-install" id="installBtn">Install</button>
   </div>
 
+  <!-- RESULT -->
   <div class="result-card" id="resultCard">
     <div class="result-icon">&#x2705;</div>
     <div class="result-title">Exported Successfully!</div>
@@ -121,6 +112,7 @@
     <button class="btn-reset" onclick="resetApp()">Process another file</button>
   </div>
 
+  <!-- STEP 1: UPLOAD -->
   <div class="card" id="uploadCard">
     <div class="card-title">&#x1F4C2; Step 1 &mdash; Upload LR Bilty File</div>
     <div class="upload-zone" id="uploadZone">
@@ -143,6 +135,7 @@
     </div>
   </div>
 
+  <!-- STEP 2: COLUMN PICKER -->
   <div class="card" id="colPickerCard" style="display:none">
     <div class="card-title">
       &#x2699;&#xFE0F; Step 2 &mdash; Choose Columns to Keep
@@ -167,116 +160,29 @@
     <div class="progress-text" id="progressText">Processing...</div>
   </div>
 
-  <div class="card" id="historyCard">
-    <div class="card-title">
-      <span>&#x1F553; Recent Exports</span>
-      <button class="clear-history" onclick="clearHistory()">Clear All</button>
-    </div>
-    <div id="historyList" class="history-list">
-      <div style="text-align:center; padding: 10px; color: var(--muted); font-size: 12px;">No recent exports found.</div>
-    </div>
-  </div>
-
 </div>
 
 <div class="footer">LR Bilty Filter &middot; Works offline after install</div>
 
 <script>
+// Default columns to pre-select (exact names from the standard LR Bilty export)
 var DEFAULT_COLS = [
-  'LR Number', 'LR Date', 'Consignor Name', 'Consignor GST Number', 
-  'Consignor City', 'Consignee Name', 'Consignee GST Number', 
-  'Truck From', 'Freight Subtotal', 'Total Freight Amount'
+  'LR Number',
+  'LR Date',
+  'Consignor Name',
+  'Consignor GST Number',
+  'Consignor City',
+  'Consignee Name',
+  'Consignee GST Number',
+  'Truck From',
+  'Freight Subtotal',
+  'Total Freight Amount'
 ];
 
-var allColumns = [];      
-var selectedColumns = []; 
-var fileData = null;      
+var allColumns = [];      // all column names from uploaded file
+var selectedColumns = []; // currently selected columns
+var fileData = null;      // parsed rows
 var deferredPrompt = null;
-
-// Load History on Boot
-window.onload = function() {
-  loadHistory();
-};
-
-// ── Database Handling (localForage) ──
-async function saveToHistory(filteredData, orderedCols, filename) {
-  try {
-    let history = await localforage.getItem('bilty_history') || [];
-    
-    // Add new export to the front of the array
-    history.unshift({
-      id: Date.now(),
-      date: new Date().toLocaleString(),
-      filename: filename,
-      rowCount: filteredData.length,
-      colCount: orderedCols.length,
-      data: filteredData,
-      cols: orderedCols
-    });
-
-    // Keep only the last 10 exports to manage storage limits gracefully
-    if (history.length > 10) {
-      history.pop();
-    }
-
-    await localforage.setItem('bilty_history', history);
-    loadHistory();
-  } catch (err) {
-    console.error("Failed to save history", err);
-  }
-}
-
-async function loadHistory() {
-  try {
-    let history = await localforage.getItem('bilty_history') || [];
-    const historyList = document.getElementById('historyList');
-    
-    if (history.length === 0) {
-      historyList.innerHTML = '<div style="text-align:center; padding: 10px; color: var(--muted); font-size: 12px;">No recent exports found.</div>';
-      return;
-    }
-
-    historyList.innerHTML = history.map(item => `
-      <div class="history-item">
-        <div class="history-info">
-          <span class="history-name">${item.filename}</span>
-          <span class="history-meta">${item.date} &middot; ${item.rowCount} records</span>
-        </div>
-        <button class="btn-history-dl" onclick="downloadFromHistory(${item.id})">&#x2B07;&#xFE0F; XLSX</button>
-      </div>
-    `).join('');
-  } catch (err) {
-    console.error("Failed to load history", err);
-  }
-}
-
-async function downloadFromHistory(id) {
-  try {
-    let history = await localforage.getItem('bilty_history') || [];
-    let item = history.find(h => h.id === id);
-    if (!item) return alert("File not found in history.");
-
-    var newWb = XLSX.utils.book_new();
-    var newWs = XLSX.utils.json_to_sheet(item.data, { header: item.cols });
-    newWs['!cols'] = item.cols.map(function(c) { return { wch: Math.max(c.length + 4, 14) }; });
-    XLSX.utils.book_append_sheet(newWb, newWs, 'Sheet1');
-    
-    var out = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' });
-    var blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    var url = URL.createObjectURL(blob);
-    
-    var a = document.createElement('a'); a.href = url; a.download = item.filename; a.click();
-  } catch (err) {
-    console.error("Error generating historical file", err);
-  }
-}
-
-async function clearHistory() {
-  if(confirm("Are you sure you want to clear your local export history?")) {
-    await localforage.removeItem('bilty_history');
-    loadHistory();
-  }
-}
 
 // ── PWA Install ──
 window.addEventListener('beforeinstallprompt', function(e) {
@@ -317,6 +223,8 @@ function handleFile(file) {
       var wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
       var ws = wb.Sheets[wb.SheetNames[0]];
 
+      // Read headers from the actual sheet row (row 1), not from data keys
+      // This ensures columns with empty first-row values are not missed
       var headerRow = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false })[0] || [];
       var data = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'DD/MM/YYYY', defval: '' });
 
@@ -330,7 +238,9 @@ function handleFile(file) {
       document.getElementById('statColsIn').textContent = allColumns.length;
       document.getElementById('statsRow').style.display = 'flex';
 
+      // Pre-select default columns that exist in this file
       selectedColumns = DEFAULT_COLS.filter(function(c) { return allColumns.indexOf(c) !== -1; });
+      // If a default col is missing, still show it as unselected but don't auto-add
 
       renderColPicker();
       document.getElementById('colPickerCard').style.display = 'block';
@@ -371,11 +281,32 @@ function toggleCol(el, col) {
   updateProcessBtn();
 }
 
-function selectAll() { selectedColumns = allColumns.slice(); renderColPicker(); updateProcessBtn(); }
-function selectNone() { selectedColumns = []; renderColPicker(); updateProcessBtn(); }
-function selectDefaults() { selectedColumns = DEFAULT_COLS.filter(function(c) { return allColumns.indexOf(c) !== -1; }); renderColPicker(); updateProcessBtn(); }
-function updateCounts() { document.getElementById('selectedCount').textContent = selectedColumns.length + ' column' + (selectedColumns.length !== 1 ? 's' : '') + ' selected'; document.getElementById('statSelected').textContent = selectedColumns.length; }
-function updateProcessBtn() { document.getElementById('processBtn').disabled = !fileData || selectedColumns.length === 0; }
+function selectAll() {
+  selectedColumns = allColumns.slice();
+  renderColPicker();
+  updateProcessBtn();
+}
+
+function selectNone() {
+  selectedColumns = [];
+  renderColPicker();
+  updateProcessBtn();
+}
+
+function selectDefaults() {
+  selectedColumns = DEFAULT_COLS.filter(function(c) { return allColumns.indexOf(c) !== -1; });
+  renderColPicker();
+  updateProcessBtn();
+}
+
+function updateCounts() {
+  document.getElementById('selectedCount').textContent = selectedColumns.length + ' column' + (selectedColumns.length !== 1 ? 's' : '') + ' selected';
+  document.getElementById('statSelected').textContent = selectedColumns.length;
+}
+
+function updateProcessBtn() {
+  document.getElementById('processBtn').disabled = !fileData || selectedColumns.length === 0;
+}
 
 // ── Process & Export ──
 function processFile() {
@@ -384,9 +315,10 @@ function processFile() {
   document.getElementById('progressWrap').classList.add('show');
   setProgress(10, 'Filtering columns...');
 
-  setTimeout(async function() {
+  setTimeout(function() {
     try {
       setProgress(40, 'Building rows...');
+      // Keep columns in the ORDER they appear in the file
       var orderedCols = allColumns.filter(function(c) { return selectedColumns.indexOf(c) !== -1; });
 
       var filtered = fileData.map(function(row) {
@@ -411,9 +343,6 @@ function processFile() {
       var out = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' });
       var blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       var url = URL.createObjectURL(blob);
-
-      // Save to local database
-      await saveToHistory(filtered, orderedCols, outName);
 
       setProgress(100, 'Done!');
       document.getElementById('resultSub').textContent =
