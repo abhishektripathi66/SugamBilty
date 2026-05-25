@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#e63946">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LR Filter">
+<link rel="manifest" href="manifest.json">
+<title>LR Bilty Filter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --red:#e63946;--dark:#1a1a2e;--panel:#16213e;
+    --field:#0f3460;--border:#2a3a5e;--gold:#f4a261;
+    --text:#e0e0e0;--muted:#8892b0;--green:#2dc653;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  body{font-family:-apple-system,'Noto Sans',sans-serif;background:var(--dark);color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
+  .topbar{background:var(--red);padding:14px 20px 12px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.4);}
+  .topbar-icon{font-size:22px;}
+  .topbar-title{font-size:18px;font-weight:700;color:#fff;letter-spacing:0.5px;}
+  .topbar-sub{font-size:11px;color:rgba(255,255,255,0.75);margin-top:1px;}
+  .main{flex:1;padding:20px 16px;max-width:640px;margin:0 auto;width:100%;}
+  .card{background:var(--panel);border-radius:14px;padding:20px;margin-bottom:16px;border:1px solid var(--border);}
+  .card-title{font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
+  .upload-zone{border:2px dashed var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:border-color 0.2s,background 0.2s;position:relative;}
+  .upload-zone:hover,.upload-zone.dragover{border-color:var(--red);background:rgba(230,57,70,0.07);}
+  .upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+  .upload-icon{font-size:40px;margin-bottom:10px;}
+  .upload-label{font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px;}
+  .upload-hint{font-size:12px;color:var(--muted);}
+  .file-info{display:none;background:rgba(44,198,83,0.1);border:1px solid var(--green);border-radius:10px;padding:12px 16px;margin-top:12px;align-items:center;gap:12px;}
+  .file-info.show{display:flex;}
+  .file-info-name{font-size:13px;font-weight:600;color:var(--green);word-break:break-all;}
+  .file-info-rows{font-size:11px;color:var(--muted);margin-top:2px;}
+  /* Column picker */
+  .col-picker-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .col-picker-actions{display:flex;gap:6px;}
+  .col-action-btn{background:var(--field);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;}
+  .col-action-btn:hover{color:var(--text);border-color:var(--muted);}
+  .col-list{display:flex;flex-direction:column;gap:4px;max-height:340px;overflow-y:auto;}
+  .col-item{display:flex;align-items:center;gap:10px;background:var(--field);border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;transition:border-color 0.15s,background 0.15s;user-select:none;}
+  .col-item.selected{border-color:var(--green);background:rgba(44,198,83,0.08);}
+  .col-item.default-col{border-color:#2a4a6e;}
+  .col-item.default-col.selected{border-color:var(--green);}
+  .col-check{width:18px;height:18px;border-radius:4px;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;transition:background 0.15s,border-color 0.15s;}
+  .col-item.selected .col-check{background:var(--green);border-color:var(--green);color:#fff;}
+  .col-name{font-size:12px;flex:1;}
+  .col-badge{font-size:9px;padding:2px 6px;border-radius:10px;background:#1a3a5e;color:var(--gold);font-weight:600;letter-spacing:0.5px;}
+  .selected-count{font-size:11px;color:var(--muted);}
+  /* Buttons */
+  .btn-process{width:100%;padding:16px;background:var(--red);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:background 0.2s,transform 0.1s,opacity 0.2s;display:flex;align-items:center;justify-content:center;gap:10px;}
+  .btn-process:disabled{opacity:0.4;cursor:not-allowed;}
+  .btn-process:not(:disabled):active{transform:scale(0.98);}
+  .btn-process:not(:disabled):hover{background:#c1121f;}
+  .progress-wrap{display:none;margin-top:12px;}
+  .progress-wrap.show{display:block;}
+  .progress-bar-bg{background:var(--field);border-radius:100px;height:8px;overflow:hidden;margin-bottom:6px;}
+  .progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--red),var(--gold));border-radius:100px;width:0%;transition:width 0.3s;}
+  .progress-text{font-size:11px;color:var(--muted);text-align:center;}
+  .result-card{display:none;background:rgba(44,198,83,0.08);border:1px solid var(--green);border-radius:14px;padding:20px;text-align:center;margin-bottom:16px;}
+  .result-card.show{display:block;}
+  .result-icon{font-size:48px;margin-bottom:8px;}
+  .result-title{font-size:17px;font-weight:700;color:var(--green);margin-bottom:4px;}
+  .result-sub{font-size:12px;color:var(--muted);margin-bottom:16px;}
+  .btn-download{display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;}
+  .btn-reset{display:block;margin:10px auto 0;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:8px 20px;font-size:13px;cursor:pointer;}
+  .stats-row{display:flex;gap:10px;margin-top:12px;}
+  .stat-box{flex:1;background:var(--field);border-radius:10px;padding:12px;text-align:center;}
+  .stat-num{font-size:22px;font-weight:700;color:var(--gold);}
+  .stat-label{font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:0.5px;}
+  .install-banner{display:none;background:linear-gradient(135deg,#0f3460,#16213e);border:1px solid var(--gold);border-radius:14px;padding:16px;margin-bottom:16px;align-items:center;gap:12px;}
+  .install-banner.show{display:flex;}
+  .install-banner-text{flex:1;}
+  .install-banner-title{font-size:13px;font-weight:700;color:var(--gold);}
+  .install-banner-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+  .btn-install{background:var(--gold);color:#1a1a2e;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+  .footer{text-align:center;padding:16px;font-size:11px;color:var(--muted);}
+  .empty-hint{text-align:center;padding:30px 10px;color:var(--muted);font-size:13px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-icon">&#x1F69B;</div>
+  <div>
+    <div class="topbar-title">LR Bilty Filter</div>
+    <div class="topbar-sub">Upload &rarr; Pick columns &rarr; Export</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="install-banner" id="installBanner">
+    <div style="font-size:28px">&#x1F4F2;</div>
+    <div class="install-banner-text">
+      <div class="install-banner-title">Install as App</div>
+      <div class="install-banner-sub">Add to home screen for offline use</div>
+    </div>
+    <button class="btn-install" id="installBtn">Install</button>
+  </div>
+
+  <!-- RESULT -->
+  <div class="result-card" id="resultCard">
+    <div class="result-icon">&#x2705;</div>
+    <div class="result-title">Exported Successfully!</div>
+    <div class="result-sub" id="resultSub">Ready to download</div>
+    <button class="btn-download" id="downloadBtn">&#x2B07;&#xFE0F; Download XLSX</button>
+    <button class="btn-reset" onclick="resetApp()">Process another file</button>
+  </div>
+
+  <!-- STEP 1: UPLOAD -->
+  <div class="card" id="uploadCard">
+    <div class="card-title">&#x1F4C2; Step 1 &mdash; Upload LR Bilty File</div>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" accept=".xlsx,.xls" id="fileInput" onchange="handleFile(this.files[0])">
+      <div class="upload-icon">&#x1F4CA;</div>
+      <div class="upload-label">Tap to select XLSX file</div>
+      <div class="upload-hint">Any LR Bilty export will work</div>
+    </div>
+    <div class="file-info" id="fileInfo">
+      <div style="font-size:24px">&#x1F4C4;</div>
+      <div>
+        <div class="file-info-name" id="fileName"></div>
+        <div class="file-info-rows" id="fileRows"></div>
+      </div>
+    </div>
+    <div class="stats-row" id="statsRow" style="display:none">
+      <div class="stat-box"><div class="stat-num" id="statRows">0</div><div class="stat-label">RECORDS</div></div>
+      <div class="stat-box"><div class="stat-num" id="statColsIn">0</div><div class="stat-label">TOTAL COLS</div></div>
+      <div class="stat-box"><div class="stat-num" id="statSelected">0</div><div class="stat-label">SELECTED</div></div>
+    </div>
+  </div>
+
+  <!-- STEP 2: COLUMN PICKER -->
+  <div class="card" id="colPickerCard" style="display:none">
+    <div class="card-title">
+      &#x2699;&#xFE0F; Step 2 &mdash; Choose Columns to Keep
+    </div>
+    <div class="col-picker-header">
+      <span class="selected-count" id="selectedCount">0 selected</span>
+      <div class="col-picker-actions">
+        <button class="col-action-btn" onclick="selectDefaults()">Reset to Default</button>
+        <button class="col-action-btn" onclick="selectAll()">All</button>
+        <button class="col-action-btn" onclick="selectNone()">None</button>
+      </div>
+    </div>
+    <div class="col-list" id="colList"></div>
+  </div>
+
+  <button class="btn-process" id="processBtn" onclick="processFile()" disabled>
+    &#x2699;&#xFE0F; Filter &amp; Export XLSX
+  </button>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-text" id="progressText">Processing...</div>
+  </div>
+
+</div>
+
+<div class="footer">LR Bilty Filter &middot; Works offline after install</div>
+
+<script>
+// Default columns to pre-select (exact names from the standard LR Bilty export)
+var DEFAULT_COLS = [
+  'LR Number',
+  'LR Date',
+  'Consignor Name',
+  'Consignor GST Number',
+  'Consignor City',
+  'Consignee Name',
+  'Consignee GST Number',
+  'Truck From',
+  'Freight Subtotal',
+  'Total Freight Amount'
+];
+
+var allColumns = [];      // all column names from uploaded file
+var selectedColumns = []; // currently selected columns
+var fileData = null;      // parsed rows
+var deferredPrompt = null;
+
+// ── PWA Install ──
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault(); deferredPrompt = e;
+  document.getElementById('installBanner').classList.add('show');
+});
+document.getElementById('installBtn').addEventListener('click', function() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(function(r) {
+    deferredPrompt = null;
+    if (r.outcome === 'accepted') document.getElementById('installBanner').classList.remove('show');
+  });
+});
+
+// ── Drag & Drop ──
+var zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', function() { zone.classList.remove('dragover'); });
+zone.addEventListener('drop', function(e) {
+  e.preventDefault(); zone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+// ── File handling ──
+function handleFile(file) {
+  if (!file) return;
+  var ext = file.name.split('.').pop().toLowerCase();
+  if (ext !== 'xlsx' && ext !== 'xls') { alert('Please upload a .xlsx or .xls file.'); return; }
+
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileRows').textContent = 'Reading...';
+  document.getElementById('fileInfo').classList.add('show');
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+
+      // Read headers from the actual sheet row (row 1), not from data keys
+      // This ensures columns with empty first-row values are not missed
+      var headerRow = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false })[0] || [];
+      var data = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'DD/MM/YYYY', defval: '' });
+
+      if (!data.length) { alert('File is empty.'); return; }
+
+      fileData = data;
+      allColumns = headerRow.filter(function(c) { return c !== null && c !== undefined && c !== ''; });
+
+      document.getElementById('fileRows').textContent = data.length + ' records, ' + allColumns.length + ' columns';
+      document.getElementById('statRows').textContent = data.length;
+      document.getElementById('statColsIn').textContent = allColumns.length;
+      document.getElementById('statsRow').style.display = 'flex';
+
+      // Pre-select default columns that exist in this file
+      selectedColumns = DEFAULT_COLS.filter(function(c) { return allColumns.indexOf(c) !== -1; });
+      // If a default col is missing, still show it as unselected but don't auto-add
+
+      renderColPicker();
+      document.getElementById('colPickerCard').style.display = 'block';
+      updateProcessBtn();
+
+    } catch(err) { alert('Could not read file: ' + err.message); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Column picker renderer ──
+function renderColPicker() {
+  var list = document.getElementById('colList');
+  list.innerHTML = allColumns.map(function(col) {
+    var isSelected = selectedColumns.indexOf(col) !== -1;
+    var isDefault = DEFAULT_COLS.indexOf(col) !== -1;
+    return '<div class="col-item' + (isSelected ? ' selected' : '') + (isDefault ? ' default-col' : '') + '" onclick="toggleCol(this, \'' + escQ(col) + '\')">' +
+      '<div class="col-check">' + (isSelected ? '&#x2713;' : '') + '</div>' +
+      '<span class="col-name">' + esc(col) + '</span>' +
+      (isDefault ? '<span class="col-badge">DEFAULT</span>' : '') +
+      '</div>';
+  }).join('');
+  updateCounts();
+}
+
+function toggleCol(el, col) {
+  var idx = selectedColumns.indexOf(col);
+  if (idx === -1) {
+    selectedColumns.push(col);
+    el.classList.add('selected');
+    el.querySelector('.col-check').innerHTML = '&#x2713;';
+  } else {
+    selectedColumns.splice(idx, 1);
+    el.classList.remove('selected');
+    el.querySelector('.col-check').innerHTML = '';
+  }
+  updateCounts();
+  updateProcessBtn();
+}
+
+function selectAll() {
+  selectedColumns = allColumns.slice();
+  renderColPicker();
+  updateProcessBtn();
+}
+
+function selectNone() {
+  selectedColumns = [];
+  renderColPicker();
+  updateProcessBtn();
+}
+
+function selectDefaults() {
+  selectedColumns = DEFAULT_COLS.filter(function(c) { return allColumns.indexOf(c) !== -1; });
+  renderColPicker();
+  updateProcessBtn();
+}
+
+function updateCounts() {
+  document.getElementById('selectedCount').textContent = selectedColumns.length + ' column' + (selectedColumns.length !== 1 ? 's' : '') + ' selected';
+  document.getElementById('statSelected').textContent = selectedColumns.length;
+}
+
+function updateProcessBtn() {
+  document.getElementById('processBtn').disabled = !fileData || selectedColumns.length === 0;
+}
+
+// ── Process & Export ──
+function processFile() {
+  if (!fileData || !selectedColumns.length) return;
+  document.getElementById('processBtn').disabled = true;
+  document.getElementById('progressWrap').classList.add('show');
+  setProgress(10, 'Filtering columns...');
+
+  setTimeout(function() {
+    try {
+      setProgress(40, 'Building rows...');
+      // Keep columns in the ORDER they appear in the file
+      var orderedCols = allColumns.filter(function(c) { return selectedColumns.indexOf(c) !== -1; });
+
+      var filtered = fileData.map(function(row) {
+        var out = {};
+        orderedCols.forEach(function(col) { out[col] = row[col] !== undefined ? row[col] : ''; });
+        return out;
+      });
+
+      setProgress(70, 'Creating Excel...');
+      var newWb = XLSX.utils.book_new();
+      var newWs = XLSX.utils.json_to_sheet(filtered, { header: orderedCols });
+      newWs['!cols'] = orderedCols.map(function(c) { return { wch: Math.max(c.length + 4, 14) }; });
+      XLSX.utils.book_append_sheet(newWb, newWs, 'Sheet1');
+
+      setProgress(88, 'Generating file...');
+      var today = new Date();
+      var outName = 'filtered_output_' +
+        String(today.getDate()).padStart(2,'0') + '_' +
+        String(today.getMonth()+1).padStart(2,'0') + '_' +
+        today.getFullYear() + '.xlsx';
+
+      var out = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' });
+      var blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      var url = URL.createObjectURL(blob);
+
+      setProgress(100, 'Done!');
+      document.getElementById('resultSub').textContent =
+        filtered.length + ' records, ' + orderedCols.length + ' columns \u2192 ' + outName;
+      document.getElementById('downloadBtn').onclick = function() {
+        var a = document.createElement('a'); a.href = url; a.download = outName; a.click();
+      };
+
+      setTimeout(function() {
+        document.getElementById('resultCard').classList.add('show');
+        document.getElementById('progressWrap').classList.remove('show');
+        document.getElementById('uploadCard').style.display = 'none';
+        document.getElementById('colPickerCard').style.display = 'none';
+        document.getElementById('processBtn').style.display = 'none';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 400);
+
+    } catch(err) {
+      document.getElementById('progressWrap').classList.remove('show');
+      document.getElementById('processBtn').disabled = false;
+      alert('Export failed: ' + err.message);
+    }
+  }, 80);
+}
+
+function setProgress(pct, text) {
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent = text;
+}
+
+function resetApp() {
+  fileData = null; allColumns = []; selectedColumns = [];
+  document.getElementById('resultCard').classList.remove('show');
+  document.getElementById('uploadCard').style.display = 'block';
+  document.getElementById('colPickerCard').style.display = 'none';
+  document.getElementById('processBtn').style.display = 'flex';
+  document.getElementById('processBtn').disabled = true;
+  document.getElementById('fileInfo').classList.remove('show');
+  document.getElementById('statsRow').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('colList').innerHTML = '';
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escQ(s) { return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>
