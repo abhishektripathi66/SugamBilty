@@ -4,14 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#e63946">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="LR Filter">
-<link rel="manifest" href="manifest.json">
 <title>LR Bilty Filter</title>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+<script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+<script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+
 <style>
   :root {
     --red:#e63946;--dark:#1a1a2e;--panel:#16213e;
@@ -26,70 +25,56 @@
   .topbar-sub{font-size:11px;color:rgba(255,255,255,0.75);margin-top:1px;}
   .main{flex:1;padding:20px 16px;max-width:640px;margin:0 auto;width:100%;}
   .card{background:var(--panel);border-radius:14px;padding:20px;margin-bottom:16px;border:1px solid var(--border);}
-  .card-title{font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:14px; display: flex; justify-content: space-between; align-items: center;}
+  .card-title{font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
+  
+  /* Storage & Auth Styles */
+  .storage-box { background: var(--field); border-radius: 10px; padding: 14px; margin-bottom: 16px; border: 1px solid var(--border);}
+  .storage-label { display: block; font-size: 12px; font-weight: 600; color: var(--gold); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;}
+  .radio-group { display: flex; flex-direction: column; gap: 10px; }
+  .radio-opt { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+  
+  .auth-section { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); display: none; }
+  .auth-section.show { display: block; }
+  
+  .user-profile { display: none; align-items: center; gap: 12px; background: rgba(44,198,83,0.1); border: 1px solid var(--green); padding: 10px; border-radius: 8px;}
+  .user-profile.show { display: flex; }
+  .user-avatar { width: 32px; height: 32px; border-radius: 50%; }
+  .user-info { flex: 1; }
+  .user-name { font-size: 13px; font-weight: 700; color: var(--green); }
+  .user-email { font-size: 11px; color: var(--muted); }
+  .btn-signout { background: none; border: none; color: var(--red); font-size: 11px; cursor: pointer; text-decoration: underline; }
+
+  /* Generic UI */
   .upload-zone{border:2px dashed var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:border-color 0.2s,background 0.2s;position:relative;}
-  .upload-zone:hover,.upload-zone.dragover{border-color:var(--red);background:rgba(230,57,70,0.07);}
   .upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
   .upload-icon{font-size:40px;margin-bottom:10px;}
   .upload-label{font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px;}
   .upload-hint{font-size:12px;color:var(--muted);}
   .file-info{display:none;background:rgba(44,198,83,0.1);border:1px solid var(--green);border-radius:10px;padding:12px 16px;margin-top:12px;align-items:center;gap:12px;}
   .file-info.show{display:flex;}
-  .file-info-name{font-size:13px;font-weight:600;color:var(--green);word-break:break-all;}
-  .file-info-rows{font-size:11px;color:var(--muted);margin-top:2px;}
-  /* Column picker */
+  
+  /* Pickers & Buttons */
   .col-picker-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-  .col-picker-actions{display:flex;gap:6px;}
   .col-action-btn{background:var(--field);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;}
-  .col-action-btn:hover{color:var(--text);border-color:var(--muted);}
   .col-list{display:flex;flex-direction:column;gap:4px;max-height:340px;overflow-y:auto;}
-  .col-item{display:flex;align-items:center;gap:10px;background:var(--field);border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;transition:border-color 0.15s,background 0.15s;user-select:none;}
+  .col-item{display:flex;align-items:center;gap:10px;background:var(--field);border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;}
   .col-item.selected{border-color:var(--green);background:rgba(44,198,83,0.08);}
-  .col-item.default-col{border-color:#2a4a6e;}
-  .col-item.default-col.selected{border-color:var(--green);}
-  .col-check{width:18px;height:18px;border-radius:4px;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;transition:background 0.15s,border-color 0.15s;}
+  .col-check{width:18px;height:18px;border-radius:4px;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;}
   .col-item.selected .col-check{background:var(--green);border-color:var(--green);color:#fff;}
   .col-name{font-size:12px;flex:1;}
-  .col-badge{font-size:9px;padding:2px 6px;border-radius:10px;background:#1a3a5e;color:var(--gold);font-weight:600;letter-spacing:0.5px;}
-  .selected-count{font-size:11px;color:var(--muted);}
-  /* Buttons */
-  .btn-process{width:100%;padding:16px;background:var(--red);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:background 0.2s,transform 0.1s,opacity 0.2s;display:flex;align-items:center;justify-content:center;gap:10px;}
+  
+  .btn-process{width:100%;padding:16px;background:var(--red);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;display:flex;justify-content:center;}
   .btn-process:disabled{opacity:0.4;cursor:not-allowed;}
-  .btn-process:not(:disabled):active{transform:scale(0.98);}
-  .btn-process:not(:disabled):hover{background:#c1121f;}
   .progress-wrap{display:none;margin-top:12px;}
   .progress-wrap.show{display:block;}
   .progress-bar-bg{background:var(--field);border-radius:100px;height:8px;overflow:hidden;margin-bottom:6px;}
-  .progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--red),var(--gold));border-radius:100px;width:0%;transition:width 0.3s;}
+  .progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--red),var(--gold));width:0%;transition:width 0.3s;}
   .progress-text{font-size:11px;color:var(--muted);text-align:center;}
+  
   .result-card{display:none;background:rgba(44,198,83,0.08);border:1px solid var(--green);border-radius:14px;padding:20px;text-align:center;margin-bottom:16px;}
   .result-card.show{display:block;}
-  .result-icon{font-size:48px;margin-bottom:8px;}
-  .result-title{font-size:17px;font-weight:700;color:var(--green);margin-bottom:4px;}
-  .result-sub{font-size:12px;color:var(--muted);margin-bottom:16px;}
   .btn-download{display:inline-flex;align-items:center;gap:8px;padding:13px 28px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;}
-  .btn-reset{display:block;margin:10px auto 0;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:8px 20px;font-size:13px;cursor:pointer;}
-  .stats-row{display:flex;gap:10px;margin-top:12px;}
-  .stat-box{flex:1;background:var(--field);border-radius:10px;padding:12px;text-align:center;}
-  .stat-num{font-size:22px;font-weight:700;color:var(--gold);}
-  .stat-label{font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:0.5px;}
-  .install-banner{display:none;background:linear-gradient(135deg,#0f3460,#16213e);border:1px solid var(--gold);border-radius:14px;padding:16px;margin-bottom:16px;align-items:center;gap:12px;}
-  .install-banner.show{display:flex;}
-  .install-banner-text{flex:1;}
-  .install-banner-title{font-size:13px;font-weight:700;color:var(--gold);}
-  .install-banner-sub{font-size:11px;color:var(--muted);margin-top:2px;}
-  .btn-install{background:var(--gold);color:#1a1a2e;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;}
-  .footer{text-align:center;padding:16px;font-size:11px;color:var(--muted);}
-  
-  /* History Styles */
-  .history-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-  .history-item { background: var(--field); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center;}
-  .history-info { display: flex; flex-direction: column; gap: 4px; }
-  .history-name { font-size: 13px; font-weight: 600; color: var(--text); }
-  .history-meta { font-size: 11px; color: var(--muted); }
-  .btn-history-dl { background: var(--border); color: var(--text); border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; cursor: pointer; transition: background 0.2s;}
-  .btn-history-dl:hover { background: var(--green); color: #fff; }
-  .clear-history { background: none; border: none; color: var(--red); font-size: 11px; cursor: pointer; text-decoration: underline; }
+  .btn-reset{display:block;margin:10px auto 0;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:8px 20px;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -104,19 +89,37 @@
 
 <div class="main">
 
-  <div class="install-banner" id="installBanner">
-    <div style="font-size:28px">&#x1F4F2;</div>
-    <div class="install-banner-text">
-      <div class="install-banner-title">Install as App</div>
-      <div class="install-banner-sub">Add to home screen for offline use</div>
+  <div class="storage-box">
+    <span class="storage-label">💾 Save History To:</span>
+    <div class="radio-group">
+      <label class="radio-opt">
+        <input type="radio" name="storageType" value="local" checked onchange="toggleAuthUI()"> 
+        📱 Local Device (Offline IndexedDB)
+      </label>
+      <label class="radio-opt">
+        <input type="radio" name="storageType" value="cloud" onchange="toggleAuthUI()"> 
+        ☁️ Google Drive (Requires Login)
+      </label>
     </div>
-    <button class="btn-install" id="installBtn">Install</button>
+
+    <div id="authSection" class="auth-section">
+      <div id="googleBtnContainer" style="display:flex; justify-content:center;"></div>
+      
+      <div id="userProfile" class="user-profile">
+        <img id="userAvatar" class="user-avatar" src="" alt="Avatar">
+        <div class="user-info">
+          <div id="userName" class="user-name"></div>
+          <div id="userEmail" class="user-email">Connected to Drive</div>
+        </div>
+        <button class="btn-signout" onclick="signOut()">Sign Out</button>
+      </div>
+    </div>
   </div>
 
   <div class="result-card" id="resultCard">
-    <div class="result-icon">&#x2705;</div>
-    <div class="result-title">Exported Successfully!</div>
-    <div class="result-sub" id="resultSub">Ready to download</div>
+    <div style="font-size:48px;margin-bottom:8px;">&#x2705;</div>
+    <div style="font-size:17px;font-weight:700;color:var(--green);margin-bottom:4px;">Success!</div>
+    <div id="resultSub" style="font-size:12px;color:var(--muted);margin-bottom:16px;">Ready</div>
     <button class="btn-download" id="downloadBtn">&#x2B07;&#xFE0F; Download XLSX</button>
     <button class="btn-reset" onclick="resetApp()">Process another file</button>
   </div>
@@ -127,342 +130,262 @@
       <input type="file" accept=".xlsx,.xls" id="fileInput" onchange="handleFile(this.files[0])">
       <div class="upload-icon">&#x1F4CA;</div>
       <div class="upload-label">Tap to select XLSX file</div>
-      <div class="upload-hint">Any LR Bilty export will work</div>
     </div>
     <div class="file-info" id="fileInfo">
       <div style="font-size:24px">&#x1F4C4;</div>
       <div>
-        <div class="file-info-name" id="fileName"></div>
-        <div class="file-info-rows" id="fileRows"></div>
+        <div id="fileName" style="font-size:13px;font-weight:600;color:var(--green);"></div>
+        <div id="fileRows" style="font-size:11px;color:var(--muted);"></div>
       </div>
-    </div>
-    <div class="stats-row" id="statsRow" style="display:none">
-      <div class="stat-box"><div class="stat-num" id="statRows">0</div><div class="stat-label">RECORDS</div></div>
-      <div class="stat-box"><div class="stat-num" id="statColsIn">0</div><div class="stat-label">TOTAL COLS</div></div>
-      <div class="stat-box"><div class="stat-num" id="statSelected">0</div><div class="stat-label">SELECTED</div></div>
     </div>
   </div>
 
   <div class="card" id="colPickerCard" style="display:none">
-    <div class="card-title">
-      &#x2699;&#xFE0F; Step 2 &mdash; Choose Columns to Keep
-    </div>
-    <div class="col-picker-header">
-      <span class="selected-count" id="selectedCount">0 selected</span>
-      <div class="col-picker-actions">
-        <button class="col-action-btn" onclick="selectDefaults()">Reset to Default</button>
-        <button class="col-action-btn" onclick="selectAll()">All</button>
-        <button class="col-action-btn" onclick="selectNone()">None</button>
-      </div>
-    </div>
+    <div class="card-title">&#x2699;&#xFE0F; Step 2 &mdash; Choose Columns</div>
     <div class="col-list" id="colList"></div>
   </div>
 
-  <button class="btn-process" id="processBtn" onclick="processFile()" disabled>
-    &#x2699;&#xFE0F; Filter &amp; Export XLSX
-  </button>
+  <button class="btn-process" id="processBtn" onclick="processFile()" disabled>Filter &amp; Export XLSX</button>
 
   <div class="progress-wrap" id="progressWrap">
     <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
     <div class="progress-text" id="progressText">Processing...</div>
   </div>
 
-  <div class="card" id="historyCard">
-    <div class="card-title">
-      <span>&#x1F553; Recent Exports</span>
-      <button class="clear-history" onclick="clearHistory()">Clear All</button>
-    </div>
-    <div id="historyList" class="history-list">
-      <div style="text-align:center; padding: 10px; color: var(--muted); font-size: 12px;">No recent exports found.</div>
-    </div>
-  </div>
-
 </div>
 
-<div class="footer">LR Bilty Filter &middot; Works offline after install</div>
-
 <script>
-var DEFAULT_COLS = [
-  'LR Number', 'LR Date', 'Consignor Name', 'Consignor GST Number', 
-  'Consignor City', 'Consignee Name', 'Consignee GST Number', 
-  'Truck From', 'Freight Subtotal', 'Total Freight Amount'
-];
+// ==========================================
+// 1. GOOGLE DRIVE & AUTHENTICATION CONFIGURATION
+// ==========================================
+// REPLACE THIS WITH YOUR ACTUAL CLIENT ID
+const CLIENT_ID = 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com';
+const API_KEY = 'YOUR_API_KEY_HERE';
+const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
-var allColumns = [];      
-var selectedColumns = []; 
-var fileData = null;      
-var deferredPrompt = null;
+let tokenClient;
+let isAuthenticated = false;
+let driveAccessToken = null;
 
-// Load History on Boot
-window.onload = function() {
-  loadHistory();
-};
-
-// ── Database Handling (localForage) ──
-async function saveToHistory(filteredData, orderedCols, filename) {
-  try {
-    let history = await localforage.getItem('bilty_history') || [];
-    
-    // Add new export to the front of the array
-    history.unshift({
-      id: Date.now(),
-      date: new Date().toLocaleString(),
-      filename: filename,
-      rowCount: filteredData.length,
-      colCount: orderedCols.length,
-      data: filteredData,
-      cols: orderedCols
-    });
-
-    // Keep only the last 10 exports to manage storage limits gracefully
-    if (history.length > 10) {
-      history.pop();
-    }
-
-    await localforage.setItem('bilty_history', history);
-    loadHistory();
-  } catch (err) {
-    console.error("Failed to save history", err);
-  }
+function gapiLoaded() { 
+  gapi.load('client', async () => { 
+    await gapi.client.init({ apiKey: API_KEY, discoveryDocs: [DISCOVERY_DOC] }); 
+  }); 
 }
 
-async function loadHistory() {
-  try {
-    let history = await localforage.getItem('bilty_history') || [];
-    const historyList = document.getElementById('historyList');
-    
-    if (history.length === 0) {
-      historyList.innerHTML = '<div style="text-align:center; padding: 10px; color: var(--muted); font-size: 12px;">No recent exports found.</div>';
-      return;
-    }
-
-    historyList.innerHTML = history.map(item => `
-      <div class="history-item">
-        <div class="history-info">
-          <span class="history-name">${item.filename}</span>
-          <span class="history-meta">${item.date} &middot; ${item.rowCount} records</span>
-        </div>
-        <button class="btn-history-dl" onclick="downloadFromHistory(${item.id})">&#x2B07;&#xFE0F; XLSX</button>
-      </div>
-    `).join('');
-  } catch (err) {
-    console.error("Failed to load history", err);
-  }
-}
-
-async function downloadFromHistory(id) {
-  try {
-    let history = await localforage.getItem('bilty_history') || [];
-    let item = history.find(h => h.id === id);
-    if (!item) return alert("File not found in history.");
-
-    var newWb = XLSX.utils.book_new();
-    var newWs = XLSX.utils.json_to_sheet(item.data, { header: item.cols });
-    newWs['!cols'] = item.cols.map(function(c) { return { wch: Math.max(c.length + 4, 14) }; });
-    XLSX.utils.book_append_sheet(newWb, newWs, 'Sheet1');
-    
-    var out = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' });
-    var blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    var url = URL.createObjectURL(blob);
-    
-    var a = document.createElement('a'); a.href = url; a.download = item.filename; a.click();
-  } catch (err) {
-    console.error("Error generating historical file", err);
-  }
-}
-
-async function clearHistory() {
-  if(confirm("Are you sure you want to clear your local export history?")) {
-    await localforage.removeItem('bilty_history');
-    loadHistory();
-  }
-}
-
-// ── PWA Install ──
-window.addEventListener('beforeinstallprompt', function(e) {
-  e.preventDefault(); deferredPrompt = e;
-  document.getElementById('installBanner').classList.add('show');
-});
-document.getElementById('installBtn').addEventListener('click', function() {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  deferredPrompt.userChoice.then(function(r) {
-    deferredPrompt = null;
-    if (r.outcome === 'accepted') document.getElementById('installBanner').classList.remove('show');
+function gisLoaded() {
+  // 1. Initialize the Google Sign-In Identity Client (Profile details)
+  google.accounts.id.initialize({
+    client_id: CLIENT_ID,
+    callback: handleCredentialResponse,
+    auto_select: true
   });
-});
+  
+  // Render the official button
+  google.accounts.id.renderButton(
+    document.getElementById("googleBtnContainer"),
+    { theme: "filled_black", size: "large", shape: "pill", width: "250" }
+  );
 
-// ── Drag & Drop ──
-var zone = document.getElementById('uploadZone');
-zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('dragover'); });
-zone.addEventListener('dragleave', function() { zone.classList.remove('dragover'); });
-zone.addEventListener('drop', function(e) {
-  e.preventDefault(); zone.classList.remove('dragover');
-  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-});
+  // 2. Initialize the Token Client (For Drive Upload Permissions)
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: (resp) => {
+      if (resp.error) {
+        alert("Drive permission denied.");
+        return;
+      }
+      driveAccessToken = resp.access_token;
+      // Continue processing the file now that we have the token
+      executeCloudExport();
+    },
+  });
+}
 
-// ── File handling ──
+// Decodes the JWT token Google sends back upon successful Sign-In
+function parseJwt(token) {
+  var base64Url = token.split('.')[1];
+  var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+  }).join(''));
+  return JSON.parse(jsonPayload);
+}
+
+function handleCredentialResponse(response) {
+  const profile = parseJwt(response.credential);
+  isAuthenticated = true;
+  
+  // Update UI with Profile Info
+  document.getElementById('googleBtnContainer').style.display = 'none';
+  document.getElementById('userProfile').classList.add('show');
+  
+  document.getElementById('userName').textContent = profile.given_name || profile.name;
+  document.getElementById('userAvatar').src = profile.picture;
+}
+
+function signOut() {
+  google.accounts.id.disableAutoSelect();
+  isAuthenticated = false;
+  driveAccessToken = null;
+  document.getElementById('googleBtnContainer').style.display = 'flex';
+  document.getElementById('userProfile').classList.remove('show');
+}
+
+function toggleAuthUI() {
+  const isCloud = document.querySelector('input[name="storageType"]:checked').value === 'cloud';
+  const authSection = document.getElementById('authSection');
+  if (isCloud) {
+    authSection.classList.add('show');
+  } else {
+    authSection.classList.remove('show');
+  }
+}
+
+// ==========================================
+// 2. EXPORT & CLOUD UPLOAD LOGIC
+// ==========================================
+async function uploadToDrive(blob, filename) {
+  setProgress(80, 'Creating file in Drive...');
+  const metadataRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: filename, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  });
+  const fileMeta = await metadataRes.json();
+  if(fileMeta.error) throw new Error(fileMeta.error.message);
+
+  setProgress(90, 'Uploading bytes to Drive...');
+  await fetch(`https://upload.googleapis.com/upload/drive/v3/files/${fileMeta.id}?uploadType=media`, {
+    method: 'PATCH',
+    headers: { 'Authorization': 'Bearer ' + driveAccessToken, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+    body: blob
+  });
+}
+
+async function saveToLocal(data, cols, filename) {
+  let history = await localforage.getItem('bilty_history') || [];
+  history.unshift({ date: new Date().toLocaleString(), filename, data, cols });
+  if (history.length > 10) history.pop();
+  await localforage.setItem('bilty_history', history);
+}
+
+// ==========================================
+// 3. CORE APP LOGIC
+// ==========================================
+var DEFAULT_COLS = ['LR Number', 'LR Date', 'Consignor Name', 'Consignor GST Number', 'Consignor City', 'Consignee Name', 'Consignee GST Number', 'Truck From', 'Freight Subtotal', 'Total Freight Amount'];
+var allColumns = [], selectedColumns = [], fileData = null, generatedBlob = null, generatedFilename = null;
+
 function handleFile(file) {
   if (!file) return;
-  var ext = file.name.split('.').pop().toLowerCase();
-  if (ext !== 'xlsx' && ext !== 'xls') { alert('Please upload a .xlsx or .xls file.'); return; }
-
   document.getElementById('fileName').textContent = file.name;
-  document.getElementById('fileRows').textContent = 'Reading...';
   document.getElementById('fileInfo').classList.add('show');
-
+  
   var reader = new FileReader();
   reader.onload = function(e) {
-    try {
-      var wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
-      var ws = wb.Sheets[wb.SheetNames[0]];
-
-      var headerRow = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false })[0] || [];
-      var data = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'DD/MM/YYYY', defval: '' });
-
-      if (!data.length) { alert('File is empty.'); return; }
-
-      fileData = data;
-      allColumns = headerRow.filter(function(c) { return c !== null && c !== undefined && c !== ''; });
-
-      document.getElementById('fileRows').textContent = data.length + ' records, ' + allColumns.length + ' columns';
-      document.getElementById('statRows').textContent = data.length;
-      document.getElementById('statColsIn').textContent = allColumns.length;
-      document.getElementById('statsRow').style.display = 'flex';
-
-      selectedColumns = DEFAULT_COLS.filter(function(c) { return allColumns.indexOf(c) !== -1; });
-
-      renderColPicker();
-      document.getElementById('colPickerCard').style.display = 'block';
-      updateProcessBtn();
-
-    } catch(err) { alert('Could not read file: ' + err.message); }
+    var wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    var headerRow = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false })[0] || [];
+    fileData = XLSX.utils.sheet_to_json(ws, { raw: false, dateNF: 'DD/MM/YYYY', defval: '' });
+    
+    allColumns = headerRow.filter(c => c);
+    selectedColumns = DEFAULT_COLS.filter(c => allColumns.includes(c));
+    document.getElementById('fileRows').textContent = fileData.length + ' records found';
+    
+    var list = document.getElementById('colList');
+    list.innerHTML = allColumns.map(col => {
+      var sel = selectedColumns.includes(col);
+      return `<div class="col-item ${sel?'selected':''}" onclick="toggleCol(this, '${col}')"><div class="col-check">${sel?'&#x2713;':''}</div><span class="col-name">${col}</span></div>`;
+    }).join('');
+    
+    document.getElementById('colPickerCard').style.display = 'block';
+    document.getElementById('processBtn').disabled = false;
   };
   reader.readAsArrayBuffer(file);
 }
 
-// ── Column picker renderer ──
-function renderColPicker() {
-  var list = document.getElementById('colList');
-  list.innerHTML = allColumns.map(function(col) {
-    var isSelected = selectedColumns.indexOf(col) !== -1;
-    var isDefault = DEFAULT_COLS.indexOf(col) !== -1;
-    return '<div class="col-item' + (isSelected ? ' selected' : '') + (isDefault ? ' default-col' : '') + '" onclick="toggleCol(this, \'' + escQ(col) + '\')">' +
-      '<div class="col-check">' + (isSelected ? '&#x2713;' : '') + '</div>' +
-      '<span class="col-name">' + esc(col) + '</span>' +
-      (isDefault ? '<span class="col-badge">DEFAULT</span>' : '') +
-      '</div>';
-  }).join('');
-  updateCounts();
-}
-
 function toggleCol(el, col) {
   var idx = selectedColumns.indexOf(col);
-  if (idx === -1) {
-    selectedColumns.push(col);
-    el.classList.add('selected');
-    el.querySelector('.col-check').innerHTML = '&#x2713;';
-  } else {
-    selectedColumns.splice(idx, 1);
-    el.classList.remove('selected');
-    el.querySelector('.col-check').innerHTML = '';
-  }
-  updateCounts();
-  updateProcessBtn();
+  if (idx === -1) { selectedColumns.push(col); el.classList.add('selected'); el.querySelector('.col-check').innerHTML = '&#x2713;'; } 
+  else { selectedColumns.splice(idx, 1); el.classList.remove('selected'); el.querySelector('.col-check').innerHTML = ''; }
+  document.getElementById('processBtn').disabled = selectedColumns.length === 0;
 }
 
-function selectAll() { selectedColumns = allColumns.slice(); renderColPicker(); updateProcessBtn(); }
-function selectNone() { selectedColumns = []; renderColPicker(); updateProcessBtn(); }
-function selectDefaults() { selectedColumns = DEFAULT_COLS.filter(function(c) { return allColumns.indexOf(c) !== -1; }); renderColPicker(); updateProcessBtn(); }
-function updateCounts() { document.getElementById('selectedCount').textContent = selectedColumns.length + ' column' + (selectedColumns.length !== 1 ? 's' : '') + ' selected'; document.getElementById('statSelected').textContent = selectedColumns.length; }
-function updateProcessBtn() { document.getElementById('processBtn').disabled = !fileData || selectedColumns.length === 0; }
-
-// ── Process & Export ──
 function processFile() {
-  if (!fileData || !selectedColumns.length) return;
+  const isCloud = document.querySelector('input[name="storageType"]:checked').value === 'cloud';
+  
+  if (isCloud && !isAuthenticated) {
+    return alert("Please Sign In with Google first to save to Drive.");
+  }
+
   document.getElementById('processBtn').disabled = true;
   document.getElementById('progressWrap').classList.add('show');
-  setProgress(10, 'Filtering columns...');
+  setProgress(20, 'Filtering data...');
 
-  setTimeout(async function() {
-    try {
-      setProgress(40, 'Building rows...');
-      var orderedCols = allColumns.filter(function(c) { return selectedColumns.indexOf(c) !== -1; });
+  setTimeout(() => {
+    var orderedCols = allColumns.filter(c => selectedColumns.includes(c));
+    var filtered = fileData.map(row => { var out={}; orderedCols.forEach(col => out[col]=row[col]||''); return out; });
 
-      var filtered = fileData.map(function(row) {
-        var out = {};
-        orderedCols.forEach(function(col) { out[col] = row[col] !== undefined ? row[col] : ''; });
-        return out;
-      });
+    setProgress(50, 'Building XLSX Blob...');
+    var newWb = XLSX.utils.book_new();
+    var newWs = XLSX.utils.json_to_sheet(filtered, { header: orderedCols });
+    XLSX.utils.book_append_sheet(newWb, newWs, 'Sheet1');
+    var out = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' });
+    
+    generatedBlob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    generatedFilename = 'filtered_' + Date.now() + '.xlsx';
 
-      setProgress(70, 'Creating Excel...');
-      var newWb = XLSX.utils.book_new();
-      var newWs = XLSX.utils.json_to_sheet(filtered, { header: orderedCols });
-      newWs['!cols'] = orderedCols.map(function(c) { return { wch: Math.max(c.length + 4, 14) }; });
-      XLSX.utils.book_append_sheet(newWb, newWs, 'Sheet1');
-
-      setProgress(88, 'Generating file...');
-      var today = new Date();
-      var outName = 'filtered_output_' +
-        String(today.getDate()).padStart(2,'0') + '_' +
-        String(today.getMonth()+1).padStart(2,'0') + '_' +
-        today.getFullYear() + '.xlsx';
-
-      var out = XLSX.write(newWb, { bookType: 'xlsx', type: 'array' });
-      var blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      var url = URL.createObjectURL(blob);
-
-      // Save to local database
-      await saveToHistory(filtered, orderedCols, outName);
-
-      setProgress(100, 'Done!');
-      document.getElementById('resultSub').textContent =
-        filtered.length + ' records, ' + orderedCols.length + ' columns \u2192 ' + outName;
-      document.getElementById('downloadBtn').onclick = function() {
-        var a = document.createElement('a'); a.href = url; a.download = outName; a.click();
-      };
-
-      setTimeout(function() {
-        document.getElementById('resultCard').classList.add('show');
-        document.getElementById('progressWrap').classList.remove('show');
-        document.getElementById('uploadCard').style.display = 'none';
-        document.getElementById('colPickerCard').style.display = 'none';
-        document.getElementById('processBtn').style.display = 'none';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 400);
-
-    } catch(err) {
-      document.getElementById('progressWrap').classList.remove('show');
-      document.getElementById('processBtn').disabled = false;
-      alert('Export failed: ' + err.message);
+    if (isCloud) {
+      // If cloud, we need the Drive token first.
+      if (gapi.client.getToken() === null || !driveAccessToken) {
+        setProgress(60, 'Requesting Drive permission...');
+        tokenClient.requestAccessToken({prompt: 'consent'});
+      } else {
+        executeCloudExport();
+      }
+    } else {
+      // Local save
+      setProgress(80, 'Saving locally...');
+      saveToLocal(filtered, orderedCols, generatedFilename).then(finishExport);
     }
-  }, 80);
+  }, 100);
 }
 
-function setProgress(pct, text) {
-  document.getElementById('progressFill').style.width = pct + '%';
-  document.getElementById('progressText').textContent = text;
+// Called after Drive token is successfully retrieved
+async function executeCloudExport() {
+  try {
+    await uploadToDrive(generatedBlob, generatedFilename);
+    finishExport();
+  } catch(err) {
+    handleExportError(err);
+  }
 }
 
-function resetApp() {
-  fileData = null; allColumns = []; selectedColumns = [];
-  document.getElementById('resultCard').classList.remove('show');
-  document.getElementById('uploadCard').style.display = 'block';
+function finishExport() {
+  setProgress(100, 'Done!');
+  var url = URL.createObjectURL(generatedBlob);
+  
+  document.getElementById('downloadBtn').onclick = function() {
+    var a = document.createElement('a'); a.href = url; a.download = generatedFilename; a.click();
+  };
+  
+  document.getElementById('resultCard').classList.add('show');
+  document.getElementById('progressWrap').classList.remove('show');
+  document.getElementById('uploadCard').style.display = 'none';
   document.getElementById('colPickerCard').style.display = 'none';
-  document.getElementById('processBtn').style.display = 'flex';
-  document.getElementById('processBtn').disabled = true;
-  document.getElementById('fileInfo').classList.remove('show');
-  document.getElementById('statsRow').style.display = 'none';
-  document.getElementById('fileInput').value = '';
-  document.getElementById('colList').innerHTML = '';
+  document.getElementById('processBtn').style.display = 'none';
 }
 
-function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function escQ(s) { return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(function(){});
+function handleExportError(err) {
+  document.getElementById('progressWrap').classList.remove('show');
+  document.getElementById('processBtn').disabled = false;
+  alert('Failed: ' + err.message);
 }
+
+function setProgress(pct, text) { document.getElementById('progressFill').style.width = pct + '%'; document.getElementById('progressText').textContent = text; }
+function resetApp() { location.reload(); }
 </script>
 </body>
 </html>
